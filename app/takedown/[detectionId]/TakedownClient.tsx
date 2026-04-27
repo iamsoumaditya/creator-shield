@@ -29,7 +29,7 @@ type TakedownAsset = {
 
 export function TakedownClient({ detection, asset }: { detection: TakedownDetection; asset: TakedownAsset }) {
   const router = useRouter();
-  const [platform, setPlatform] = useState<string>("Google Search");
+  const [platform, setPlatform] = useState<string | null>("Google Search");
   const [draft, setDraft] = useState(detection.takedownDraft || "");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);

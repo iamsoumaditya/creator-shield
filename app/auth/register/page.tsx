@@ -15,7 +15,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [creatorType, setCreatorType] = useState("");
+  const [creatorType, setCreatorType] = useState<string|null>("");
   const [portfolioUrl, setPortfolioUrl] = useState("");
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");

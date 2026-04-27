@@ -28,7 +28,7 @@ export default function RegisterAssetPage() {
   // Details state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [licenseType, setLicenseType] = useState("");
+  const [licenseType, setLicenseType] = useState<string| null>("");
   const [tags, setTags] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);

@@ -17,7 +17,7 @@ export function TopNavbar() {
           <Link href="/dashboard#takedowns" className="hover:text-indigo-600 transition-colors">Takedowns</Link>
         </nav>
         <div className="flex items-center gap-4">
-          <UserButton afterSignOutUrl="/auth/login" />
+          <UserButton />
         </div>
       </div>
     </header>
