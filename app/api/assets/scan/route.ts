@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Scan only avialable for paid Users" }, { status: 403 });
 
     const { assetId } = await req.json();
-    
+
     const asset = await db.query.assets.findFirst({
       where: eq(assets.id, assetId),
       with: { detections: true }
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     const base64Image = fileBuffer.toString("base64");
 
     const visionUrl = `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_CLOUD_VISION_API_KEY}`;
-    
+
     const visionRes = await fetch(visionUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     });
 
     const visionData = await visionRes.json();
-    
+
     if (!visionRes.ok) throw new Error(visionData.error?.message || "Vision API failed");
 
     const webDetection = visionData.responses[0]?.webDetection;
