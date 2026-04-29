@@ -63,7 +63,8 @@ export async function uploadBufferToCloudinary(
   const signature = signCloudinaryParams({ public_id: publicId, timestamp });
 
   const formData = new FormData();
-  formData.append("file", new Blob([buffer], { type: mimeType }));
+  const uint8Array = new Uint8Array(buffer);
+  formData.append("file", new Blob([uint8Array], { type: mimeType }));
   formData.append("api_key", apiKey);
   formData.append("timestamp", String(timestamp));
   formData.append("public_id", publicId);

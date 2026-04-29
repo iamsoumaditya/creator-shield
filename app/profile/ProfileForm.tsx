@@ -25,7 +25,7 @@ type ProfileFormProps = {
 };
 
 export function ProfileForm({ profile }: ProfileFormProps) {
-  const [creatorType, setCreatorType] = useState(profile.creatorType ?? "");
+  const [creatorType, setCreatorType] = useState<string|null>(profile.creatorType ?? "");
   const [portfolioUrl, setPortfolioUrl] = useState(profile.portfolioUrl ?? "");
   const [companyName, setCompanyName] = useState(profile.companyName ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(profile.websiteUrl ?? "");
