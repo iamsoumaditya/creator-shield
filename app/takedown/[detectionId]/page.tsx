@@ -1,18 +1,21 @@
 import { TopNavbar } from "@/components/dashboard/TopNavbar";
 import { db } from "@/lib/db";
-import { detections, assets } from "@/lib/db/schema";
+import { detections } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { TakedownClient } from "./TakedownClient";
+import { syncUserToDatabase } from "@/lib/user-sync";
 
 export default async function TakedownPage({ params }: { params: Promise<{ detectionId: string }> }) {
-  const { userId } = await auth();
+  const user = await currentUser();
   const { detectionId } = await params;
   
-  if (!userId) {
+  if (!user) {
     redirect("/auth/login");
   }
+  const syncedUser = await syncUserToDatabase(user);
+  const userId = syncedUser.id;
 
   // Fetch detection and related asset
   const detection = await db.query.detections.findFirst({

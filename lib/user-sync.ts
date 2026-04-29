@@ -22,14 +22,20 @@ function normalizeString(value: unknown) {
 
 export async function syncUserToDatabase(user: ClerkUser, overrides: ProfileOverrides = {}) {
   const metadata = user.unsafeMetadata ?? {};
-  const existingUser = await db.query.users.findFirst({
+  const email = user.primaryEmailAddress?.emailAddress || user.emailAddresses[0]?.emailAddress || `${user.id}@creator.local`;
+  const existingUserById = await db.query.users.findFirst({
     where: eq(users.id, user.id),
   });
+  const existingUserByEmail = await db.query.users.findFirst({
+    where: eq(users.email, email),
+  });
+  const existingUser = existingUserByEmail ?? existingUserById;
+  const databaseUserId = existingUser?.id ?? user.id;
 
   const payload = {
-    id: user.id,
+    id: databaseUserId,
     name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Unknown User",
-    email: user.emailAddresses[0]?.emailAddress || "",
+    email,
     creatorType: overrides.creatorType ?? normalizeString(metadata.creatorType) ?? existingUser?.creatorType ?? null,
     portfolioUrl: overrides.portfolioUrl ?? normalizeString(metadata.portfolioUrl) ?? existingUser?.portfolioUrl ?? null,
     companyName: overrides.companyName ?? normalizeString(metadata.companyName) ?? existingUser?.companyName ?? null,
@@ -40,7 +46,7 @@ export async function syncUserToDatabase(user: ClerkUser, overrides: ProfileOver
     bio: overrides.bio ?? normalizeString(metadata.bio) ?? existingUser?.bio ?? null,
   };
 
-  await db
+  const [syncedUser] = await db
     .insert(users)
     .values(payload)
     .onConflictDoUpdate({
@@ -57,7 +63,8 @@ export async function syncUserToDatabase(user: ClerkUser, overrides: ProfileOver
         location: payload.location,
         bio: payload.bio,
       },
-    });
+    })
+    .returning();
 
-  return payload;
+  return syncedUser ?? payload;
 }

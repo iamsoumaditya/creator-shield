@@ -13,10 +13,10 @@ export default async function ProfilePage() {
     redirect("/auth/login");
   }
 
-  await syncUserToDatabase(user);
+  const syncedUser = await syncUserToDatabase(user);
 
   const profile = await db.query.users.findFirst({
-    where: eq(users.id, user.id),
+    where: eq(users.id, syncedUser.id),
   });
 
   if (!profile) {

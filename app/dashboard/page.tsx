@@ -16,8 +16,8 @@ export default async function DashboardPage() {
     redirect("/auth/login");
   }
 
-  await syncUserToDatabase(user);
-  const userId = user.id;
+  const syncedUser = await syncUserToDatabase(user);
+  const userId = syncedUser.id;
 
   // Fetch from DB
   const userAssets = await db.query.assets.findMany({

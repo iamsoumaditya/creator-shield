@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (!user) return new Response("Unauthorized", { status: 401 });
 
     const syncedUser = await syncUserToDatabase(user);
-    const userId = user.id;
+    const userId = syncedUser.id;
 
     const body = await req.json();
     const { detectionId, platform } = body;

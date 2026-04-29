@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { assets, detections } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
-import { clerkClient } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { calculateHammingDistance, computeImagePHash } from "@/lib/watermark";
+import { syncUserToDatabase } from "@/lib/user-sync";
 
 const PHASH_DISTANCE_THRESHOLD = 10;
 const MAX_CANDIDATE_IMAGES_PER_PAGE = 3;
@@ -56,13 +56,13 @@ async function getVerifiedMatchScore(
 
 export async function POST(req: NextRequest) {
   try {
-    const client = await clerkClient();
-    const { userId } = await auth();
-    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = await currentUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const user = await client.users.getUser(userId)
     if (!user.publicMetadata.paid)
       return NextResponse.json({ error: "Scan only avialable for paid Users" }, { status: 403 });
+    const syncedUser = await syncUserToDatabase(user);
+    const userId = syncedUser.id;
 
     const { assetId } = await req.json();
 
