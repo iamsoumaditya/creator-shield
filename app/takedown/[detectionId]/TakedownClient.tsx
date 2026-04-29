@@ -7,7 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Gavel, Copy, Download, CheckCircle2, Bot, ArrowLeft } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Gavel, Copy, Download, CheckCircle2, Bot, ArrowLeft, Eye, PencilLine } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -82,7 +84,16 @@ export function TakedownClient({ detection, asset }: { detection: TakedownDetect
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(draft);
+    const html = markdownToHtml(draft);
+    if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+      const item = new ClipboardItem({
+        "text/plain": new Blob([draft], { type: "text/plain" }),
+        "text/html": new Blob([html], { type: "text/html" }),
+      });
+      navigator.clipboard.write([item]);
+    } else {
+      navigator.clipboard.writeText(draft);
+    }
     toast.success("Copied to clipboard");
   };
 
@@ -135,8 +146,8 @@ export function TakedownClient({ detection, asset }: { detection: TakedownDetect
                  <div className="text-xs text-slate-500 font-medium mb-1">Protected Asset</div>
                  <div className="flex gap-4 items-center bg-slate-50 p-2 rounded border">
                    <img 
-                     src={asset.watermarkedUrl || (asset.originalUrl?.match(/[/\\]/) ? `/uploads/${asset.originalUrl.split(/[/\\]/).pop()}` : asset.originalUrl)} 
-                     alt={asset.title} 
+                     src={asset.watermarkedUrl || asset.originalUrl} 
+                     alt={asset.title}
                      className="w-12 h-12 rounded object-cover" 
                    />
                    <div>
@@ -201,19 +212,39 @@ export function TakedownClient({ detection, asset }: { detection: TakedownDetect
                 </Button>
               </div>
 
-              <div className="flex-1 min-h-[300px] border rounded-md bg-slate-50 overflow-hidden relative">
-                 {draft ? (
-                   <textarea
-                     className="w-full h-full p-4 bg-transparent outline-none resize-none font-mono text-sm leading-relaxed"
-                     value={draft}
-                     onChange={(e) => setDraft(e.target.value)}
-                   />
-                 ) : (
-                   <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-8 text-center space-y-3">
-                     <Gavel className="w-12 h-12 text-slate-200" />
-                     <p>Select a platform and generate your legally-sound DMCA takedown draft.</p>
-                   </div>
-                 )}
+              <div className="flex-1 min-h-[360px] overflow-hidden rounded-md border bg-slate-50">
+                {draft ? (
+                  <Tabs defaultValue="edit" className="h-full gap-0">
+                    <div className="border-b bg-white px-3 py-2">
+                      <TabsList className="bg-slate-100">
+                        <TabsTrigger value="edit" className="gap-2">
+                          <PencilLine className="w-4 h-4" /> Edit
+                        </TabsTrigger>
+                        <TabsTrigger value="preview" className="gap-2">
+                          <Eye className="w-4 h-4" /> Preview
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
+                    <TabsContent value="edit" className="m-0 h-[320px]">
+                      <Textarea
+                        className="h-full min-h-full rounded-none border-0 bg-transparent p-4 font-mono text-sm leading-relaxed shadow-none focus-visible:ring-0"
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                      />
+                    </TabsContent>
+                    <TabsContent value="preview" className="m-0 h-[320px] overflow-auto bg-white p-6">
+                      <div
+                        className="space-y-3 text-sm leading-7 text-slate-800"
+                        dangerouslySetInnerHTML={{ __html: markdownToHtml(draft) }}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                ) : (
+                  <div className="flex h-full min-h-[360px] flex-col items-center justify-center p-8 text-center text-slate-400 space-y-3">
+                    <Gavel className="w-12 h-12 text-slate-200" />
+                    <p>Select a platform and generate your legally-sound DMCA takedown draft.</p>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-wrap gap-3 items-center justify-between pt-4 border-t">
@@ -236,4 +267,24 @@ export function TakedownClient({ detection, asset }: { detection: TakedownDetect
       </div>
     </div>
   );
+}
+
+function escapeHtml(input: string) {
+  return input
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function markdownToHtml(input: string) {
+  const escaped = escapeHtml(input);
+  const paragraphs = escaped.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+
+  return paragraphs
+    .map((block) => {
+      const withBold = block.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      const withBreaks = withBold.replace(/\n/g, "<br />");
+      return `<p>${withBreaks}</p>`;
+    })
+    .join("");
 }

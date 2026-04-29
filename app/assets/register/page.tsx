@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { UploadCloud, CheckCircle2, ShieldCheck, ArrowRight, Loader2, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -23,6 +22,8 @@ export default function RegisterAssetPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [watermarkedUrl, setWatermarkedUrl] = useState<string | null>(null);
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
+  const [originalPublicId, setOriginalPublicId] = useState<string | null>(null);
+  const [watermarkedPublicId, setWatermarkedPublicId] = useState<string | null>(null);
   const [pHash, setPHash] = useState<string | null>(null);
   
   // Details state
@@ -36,6 +37,10 @@ export default function RegisterAssetPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
+      if (!selectedFile.type.startsWith("image/")) {
+        toast.error("Please upload an image file.");
+        return;
+      }
       setFile(selectedFile);
       setPreviewUrl(URL.createObjectURL(selectedFile));
     }
@@ -44,24 +49,55 @@ export default function RegisterAssetPage() {
   const processWatermark = async () => {
     if (!file) return;
     setIsProcessing(true);
-    
-    const formData = new FormData();
-    formData.append("file", file);
 
     try {
+      const signatureRes = await fetch("/api/uploads/signature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name }),
+      });
+
+      const signatureData = await signatureRes.json();
+      if (!signatureRes.ok) throw new Error(signatureData.error || "Failed to sign upload");
+
+      const cloudinaryFormData = new FormData();
+      cloudinaryFormData.append("file", file);
+      cloudinaryFormData.append("api_key", signatureData.apiKey);
+      cloudinaryFormData.append("timestamp", String(signatureData.timestamp));
+      cloudinaryFormData.append("public_id", signatureData.publicId);
+      cloudinaryFormData.append("signature", signatureData.signature);
+
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${signatureData.cloudName}/image/upload`,
+        {
+          method: "POST",
+          body: cloudinaryFormData,
+        }
+      );
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.error?.message || "Failed to upload original image");
+
       const res = await fetch("/api/assets/process", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          originalUrl: uploadData.secure_url,
+          originalPublicId: uploadData.public_id,
+        }),
       });
       const data = await res.json();
-      
+
       if (!res.ok) throw new Error(data.error || "Failed to process");
       setOriginalUrl(data.originalUrl);
+      setOriginalPublicId(data.originalPublicId);
       setWatermarkedUrl(data.watermarkedUrl);
+      setWatermarkedPublicId(data.watermarkedPublicId);
       setPHash(data.pHash);
       setStep(2);
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to process image";
+      toast.error(message);
     } finally {
       setIsProcessing(false);
     }
@@ -70,7 +106,6 @@ export default function RegisterAssetPage() {
   const saveToSystem = async () => {
     setIsSaving(true);
     try {
-      const fullUrl = new URL(`/public${originalUrl}`, window.location.origin).toString();
       const res = await fetch("/api/assets/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,8 +115,12 @@ export default function RegisterAssetPage() {
           licenseType,
           tags,
           pHash,
-          originalUrl: fullUrl, // In real app, you'd upload original elsewhere or during /process
-          watermarkedUrl
+          originalFilename: file?.name,
+          originalMimeType: file?.type,
+          originalPublicId,
+          originalUrl,
+          watermarkedPublicId,
+          watermarkedUrl,
         })
       });
       const data = await res.json();
@@ -89,8 +128,9 @@ export default function RegisterAssetPage() {
       
       toast.success("Asset beautifully secured and registered.");
       router.push("/dashboard");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to save asset";
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
@@ -140,7 +180,7 @@ export default function RegisterAssetPage() {
                   </div>
                   <h3 className="text-xl font-semibold mb-2">Upload your asset</h3>
                   <p className="text-slate-500 mb-8 max-w-sm">Drag and drop your image file here, or click to browse. Max size 10MB.</p>
-                  <Input type="file" accept="image/jpeg, image/png, image/webp" className="hidden" id="file-upload" onChange={handleFileChange} />
+                  <Input type="file" accept="image/*" className="hidden" id="file-upload" onChange={handleFileChange} />
                   <Label htmlFor="file-upload">
                     <div className="bg-indigo-600 text-white px-6 py-2.5 rounded-md font-medium hover:bg-indigo-700 cursor-pointer transition-colors shadow-sm inline-flex items-center gap-2">
                       <ImageIcon className="w-4 h-4" /> Browse Files
@@ -173,7 +213,7 @@ export default function RegisterAssetPage() {
                   Original
                 </div>
                 <div className="p-4 bg-slate-100 aspect-square flex items-center justify-center relative overflow-hidden">
-                  <img src={previewUrl!} className="max-w-full max-h-full object-contain" />
+                  <img src={previewUrl!} alt="Original asset preview" className="max-w-full max-h-full object-contain" />
                 </div>
               </Card>
               <Card className="border-indigo-200 shadow-sm overflow-hidden">
@@ -182,7 +222,7 @@ export default function RegisterAssetPage() {
                   <Badge variant="default" className="bg-indigo-600"><ShieldCheck className="w-3 h-3 mr-1"/> Protected</Badge>
                 </div>
                 <div className="p-4 bg-slate-100 aspect-square flex items-center justify-center relative overflow-hidden group">
-                  <img src={watermarkedUrl || previewUrl!} className="max-w-full max-h-full object-contain" />
+                  <img src={watermarkedUrl || previewUrl!} alt="Watermarked asset preview" className="max-w-full max-h-full object-contain" />
                   <div className="absolute inset-0 bg-indigo-900/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <div className="bg-white/90 backdrop-blur text-xs px-3 py-2 text-indigo-900 font-mono shadow-sm rounded-md font-medium border border-indigo-100">
                       pHash: {pHash}
@@ -253,7 +293,7 @@ export default function RegisterAssetPage() {
             <CardContent className="p-6">
               <div className="flex flex-col md:flex-row gap-8">
                 <div className="w-full md:w-1/3 bg-slate-100 rounded-lg aspect-square overflow-hidden border">
-                   <img src={watermarkedUrl || previewUrl!} className="w-full h-full object-cover" />
+                   <img src={watermarkedUrl || previewUrl!} alt="Registered asset preview" className="w-full h-full object-cover" />
                 </div>
                 <div className="w-full md:w-2/3 space-y-6">
                   <div>

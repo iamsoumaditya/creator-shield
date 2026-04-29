@@ -4,16 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { assets, detections } from "@/lib/db/schema";
+import { assets } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { syncUserToDatabase } from "@/lib/user-sync";
 
 export default async function DashboardPage() {
-  const { userId } = await auth();
-  if (!userId) {
+  const user = await currentUser();
+  if (!user) {
     redirect("/auth/login");
   }
+
+  await syncUserToDatabase(user);
+  const userId = user.id;
 
   // Fetch from DB
   const userAssets = await db.query.assets.findMany({
@@ -27,7 +31,7 @@ export default async function DashboardPage() {
   // Calculate stats
   const totalAssets = userAssets.length;
   let activeDetections = 0;
-  let takedownsSent = 0;
+  const takedownsSent = 0;
   let resolved = 0;
 
   const transformedAssets = userAssets.map((asset) => {

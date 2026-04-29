@@ -15,6 +15,7 @@ export function TopNavbar() {
           <Link href="/dashboard#assets" className="hover:text-indigo-600 transition-colors">My Assets</Link>
           <Link href="/dashboard#detections" className="hover:text-indigo-600 transition-colors">Detections</Link>
           <Link href="/dashboard#takedowns" className="hover:text-indigo-600 transition-colors">Takedowns</Link>
+          <Link href="/profile" className="hover:text-indigo-600 transition-colors">Profile</Link>
         </nav>
         <div className="flex items-center gap-4">
           <UserButton />

@@ -1,8 +1,5 @@
 import { Jimp } from 'jimp';
 import { intToRGBA, rgbaToInt } from '@jimp/utils';
-import path from 'path';
-import fs from 'fs/promises';
-import crypto from 'crypto';
 
 /**
  * Computes a simple perceptual hash (Average Hash) for the image
@@ -39,6 +36,29 @@ async function computeHash(image: any): Promise<string> {
   }
   
   return hexStr;
+}
+
+export async function computeImagePHash(buffer: Buffer): Promise<string> {
+  const image = await Jimp.read(buffer);
+  return computeHash(image);
+}
+
+export function calculateHammingDistance(hashA: string, hashB: string): number {
+  if (hashA.length !== hashB.length) {
+    throw new Error("Hashes must have the same length");
+  }
+
+  let distance = 0;
+
+  for (let index = 0; index < hashA.length; index++) {
+    const valueA = parseInt(hashA[index], 16);
+    const valueB = parseInt(hashB[index], 16);
+    const xor = valueA ^ valueB;
+
+    distance += xor.toString(2).replace(/0/g, "").length;
+  }
+
+  return distance;
 }
 
 /**

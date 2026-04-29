@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "@/lib/db";
-import { detections, takedownNotices } from "@/lib/db/schema";
+import { detections, takedownNotices, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { auth } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
+import { syncUserToDatabase } from "@/lib/user-sync";
 
 function chunkText(text: string, size = 180) {
   const chunks: string[] = [];
@@ -15,8 +16,11 @@ function chunkText(text: string, size = 180) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = await auth();
-    if (!userId) return new Response("Unauthorized", { status: 401 });
+    const user = await currentUser();
+    if (!user) return new Response("Unauthorized", { status: 401 });
+
+    const syncedUser = await syncUserToDatabase(user);
+    const userId = user.id;
 
     const body = await req.json();
     const { detectionId, platform } = body;
@@ -30,6 +34,10 @@ export async function POST(req: NextRequest) {
       return new Response("Not found or unauthorized", { status: 404 });
     }
 
+    const profile = await db.query.users.findFirst({
+      where: eq(users.id, userId),
+    });
+
     if (!process.env.GEMINI_API_KEY) {
       return new Response("Gemini API key is not configured.", { status: 500 });
     }
@@ -37,14 +45,51 @@ export async function POST(req: NextRequest) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-    const prompt = `System: "You are a legal assistant specializing in digital copyright and DMCA takedown notices."
-User: "Draft a formal DMCA takedown notice for the following:
-- Rights holder: ${userId}
-- Original work: ${detection.asset.title}, registered on ${detection.asset.createdAt.toISOString().split("T")[0]}
-- Original URL: ${detection.asset.originalUrl}  
-- Infringing URL: ${detection.infringingUrl}
+    const rightsHolder = profile ?? syncedUser;
+    const prompt = `
+You are a senior copyright enforcement specialist and legal communications writer.
+Write a polished, production-ready takedown email that can be sent immediately with no manual editing.
+
+Requirements:
+- Output only the finished email draft.
+- Include a clear subject line on the first line in the form: **Subject:** ...
+- Use markdown-style bold for section labels such as **Subject:**, **To:**, **From:** when helpful.
+- Personalize the message with the rights holder's real details below.
+- The email must read like a human professional wrote it, not a template.
+- Do not use placeholders like [NAME], [EMAIL], [DATE], or similar.
+- If a field is missing, simply omit or gracefully work around it.
+- Address the platform or recipient team naturally for ${platform}.
+- State ownership, identify the infringing URL, reference the original work, request removal/disablement, include good-faith and accuracy statements, and provide a direct signature block.
+- Keep the tone formal, confident, and concise enough to send as an actual email.
+
+Rights holder details:
+- Full name: ${rightsHolder.name}
+- Email: ${rightsHolder.email}
+- Creator type: ${rightsHolder.creatorType ?? "Not provided"}
+- Company or studio: ${rightsHolder.companyName ?? "Not provided"}
+- Website: ${rightsHolder.websiteUrl ?? "Not provided"}
+- Portfolio: ${rightsHolder.portfolioUrl ?? "Not provided"}
+- Instagram: ${rightsHolder.instagramHandle ?? "Not provided"}
+- X handle: ${rightsHolder.xHandle ?? "Not provided"}
+- Location: ${rightsHolder.location ?? "Not provided"}
+- Bio: ${rightsHolder.bio ?? "Not provided"}
+
+Asset details:
+- Title: ${detection.asset.title}
+- Description: ${detection.asset.description ?? "Not provided"}
+- License: ${detection.asset.licenseType ?? "Not provided"}
+- Tags: ${detection.asset.tags ?? "Not provided"}
+- Registered on: ${detection.asset.createdAt.toISOString().split("T")[0]}
+- Original URL: ${detection.asset.originalUrl}
+- Public watermark hash: ${detection.asset.pHash ?? "Not provided"}
+
+Infringement details:
 - Platform: ${platform}
-Format it as a complete, ready-to-send notice with all required DMCA sections. Be formal and legally precise."`;
+- Infringing URL: ${detection.infringingUrl}
+- Match score: ${Math.round(detection.matchScore * 100)}%
+
+Return a complete ready-to-send email only.
+`.trim();
 
     const model = genAI.getGenerativeModel({ model: modelName });
     const generationResp = await model.generateContent(prompt);

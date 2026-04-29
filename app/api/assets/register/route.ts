@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
-import { assets, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { assets } from "@/lib/db/schema";
+import { syncUserToDatabase } from "@/lib/user-sync";
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,17 +10,24 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const userId = user.id;
 
-    // Ensure user exists in our database to satisfy foreign key constraints
-    await db.insert(users).values({
-      id: user.id,
-      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown User',
-      email: user.emailAddresses[0]?.emailAddress || '',
-    }).onConflictDoNothing();
+    await syncUserToDatabase(user);
 
     const body = await req.json();
-    const { title, description, licenseType, tags, originalUrl, watermarkedUrl, pHash } = body;
+    const {
+      title,
+      description,
+      licenseType,
+      tags,
+      originalFilename,
+      originalMimeType,
+      originalPublicId,
+      originalUrl,
+      watermarkedPublicId,
+      watermarkedUrl,
+      pHash,
+    } = body;
 
-    if (!title || !originalUrl) {
+    if (!title || !originalUrl || !originalPublicId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -28,15 +35,22 @@ export async function POST(req: NextRequest) {
     const [inserted] = await db.insert(assets).values({
       title,
       description: description || null,
+      licenseType: licenseType || null,
+      tags: tags || null,
+      originalFilename: originalFilename || null,
+      originalMimeType: originalMimeType || null,
+      originalPublicId,
       originalUrl,
+      watermarkedPublicId,
       watermarkedUrl,
       pHash,
       userId,
     }).returning();
 
     return NextResponse.json({ success: true, asset: inserted });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to save asset";
     console.error("Asset registration error:", error);
-    return NextResponse.json({ error: error.message || "Failed to save asset" }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

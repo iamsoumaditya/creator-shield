@@ -5,6 +5,14 @@ export const users = pgTable('users', {
   id: text('id').primaryKey(), // Clerk User ID
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
+  creatorType: text('creator_type'),
+  portfolioUrl: text('portfolio_url'),
+  companyName: text('company_name'),
+  websiteUrl: text('website_url'),
+  instagramHandle: text('instagram_handle'),
+  xHandle: text('x_handle'),
+  location: text('location'),
+  bio: text('bio'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -12,7 +20,13 @@ export const assets = pgTable('assets', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
   description: text('description'),
+  licenseType: text('license_type'),
+  tags: text('tags'),
+  originalFilename: text('original_filename'),
+  originalMimeType: text('original_mime_type'),
+  originalPublicId: text('original_public_id'),
   originalUrl: text('original_url').notNull(),
+  watermarkedPublicId: text('watermarked_public_id'),
   watermarkedUrl: text('watermarked_url'),
   pHash: text('p_hash'),
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
